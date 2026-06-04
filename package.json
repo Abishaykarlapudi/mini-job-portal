@@ -1,0 +1,12 @@
+{
+  "name": "mini-job-portal",
+  "version": "1.0.0",
+  "description": "Full Stack Mini Job Portal - React + Node.js + Express + MongoDB",
+  "scripts": {
+    "backend": "cd backend && npm start",
+    "frontend": "cd frontend && npm run dev"
+  },
+  "keywords": ["job-portal", "react", "nodejs", "express", "mongodb"],
+  "author": "",
+  "license": "ISC"
+}
