@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { useAuth } from '../context/AuthContext';
 import JobForm from '../components/JobForm';
 
 export default function EditJobPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { token } = useAuth();
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -30,7 +32,7 @@ export default function EditJobPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.updateJob(id, formData);
+      const data = await api.updateJob(id, formData, token);
       if (data.success) {
         navigate(`/jobs/${id}`);
       } else {

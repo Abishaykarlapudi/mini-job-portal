@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { useAuth } from '../context/AuthContext';
 import JobForm from '../components/JobForm';
 
 export default function CreateJobPage() {
   const navigate = useNavigate();
+  const { token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -12,7 +14,7 @@ export default function CreateJobPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.createJob(formData);
+      const data = await api.createJob(formData, token);
       if (data.success) {
         navigate(`/jobs/${data.data._id}`);
       } else {

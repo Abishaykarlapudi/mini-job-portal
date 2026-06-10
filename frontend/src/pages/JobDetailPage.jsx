@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { useAuth } from '../context/AuthContext';
 import ApplicationForm from '../components/ApplicationForm';
 
 const TYPE_CLASS = {
@@ -24,6 +25,8 @@ function formatDate(d) {
 export default function JobDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user, token, isRecruiter, isCandidate } = useAuth();
+
   const [job, setJob] = useState(null);
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +34,9 @@ export default function JobDetailPage() {
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showApps, setShowApps] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [savingJob, setSavingJob] = useState(false);
+  const [savedJobId, setSavedJobId] = useState(null);
 
   const fetchJob = async () => {
     setLoading(true);
@@ -46,26 +52,71 @@ export default function JobDetailPage() {
   };
 
   const fetchApplications = async () => {
+    if (!isRecruiter || !token) return;
     try {
-      const data = await api.getApplications(id);
+      const data = await api.getApplications(id, token);
       if (data.success) setApplications(data.data);
     } catch { /* silently fail */ }
+  };
+
+  // Check if this job is saved by the current candidate
+  const checkSavedStatus = async () => {
+    if (!isCandidate || !token) return;
+    try {
+      const res = await api.getSavedJobs(token);
+      if (res.success) {
+        const match = res.data.find((s) => s.jobId?._id === id || s.jobId === id);
+        if (match) {
+          setSaved(true);
+          setSavedJobId(match._id);
+        }
+      }
+    } catch { /* ignore */ }
   };
 
   useEffect(() => {
     fetchJob();
     fetchApplications();
-  }, [id]);
+    checkSavedStatus();
+  }, [id, token]);
 
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const data = await api.deleteJob(id);
+      const data = await api.deleteJob(id, token);
       if (data.success) navigate('/');
     } catch {
       setDeleting(false);
     }
   };
+
+  const handleSaveToggle = async () => {
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    setSavingJob(true);
+    try {
+      if (saved) {
+        await api.unsaveJob(id, token);
+        setSaved(false);
+      } else {
+        const res = await api.saveJob(id, token);
+        if (res.success) {
+          setSaved(true);
+        }
+      }
+    } finally {
+      setSavingJob(false);
+    }
+  };
+
+  // Ownership check: recruiter can edit/delete only their own jobs
+  const isOwner = isRecruiter && job?.postedBy && (
+    job.postedBy._id === user?.id || job.postedBy === user?.id
+  );
+  // Allow legacy jobs (no postedBy) to be managed by any recruiter
+  const canManage = isRecruiter && (!job?.postedBy || isOwner);
 
   if (loading) {
     return (
@@ -110,6 +161,11 @@ export default function JobDetailPage() {
                   <div>
                     <h1 className="job-detail-title" id="job-title">{job.title}</h1>
                     <p className="job-detail-company">{job.company}</p>
+                    {job.postedBy?.name && (
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Posted by {job.postedBy.name}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -129,33 +185,61 @@ export default function JobDetailPage() {
               <div className="section-heading">Job Description</div>
               <p className="job-description" id="job-description">{job.description}</p>
 
-              {/* Admin Actions */}
+              {/* Action Buttons */}
               <div style={{ display: 'flex', gap: '12px', marginTop: '32px', flexWrap: 'wrap' }}>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => navigate(`/jobs/${id}/edit`)}
-                  id="edit-job-btn"
-                >
-                  ✏️ Edit Job
-                </button>
-                <button
-                  className="btn btn-danger"
-                  onClick={() => setDeleteModal(true)}
-                  id="delete-job-btn"
-                >
-                  🗑️ Delete Job
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => { setShowApps(s => !s); fetchApplications(); }}
-                  id="view-applications-btn"
-                >
-                  👥 Applications ({applications.length})
-                </button>
+                {/* Candidate: Save Job */}
+                {isCandidate && (
+                  <button
+                    className={`btn ${saved ? 'btn-secondary' : 'btn-primary'}`}
+                    onClick={handleSaveToggle}
+                    disabled={savingJob}
+                    id="save-job-btn"
+                  >
+                    {savingJob ? '...' : saved ? '🔖 Saved' : '🔖 Save Job'}
+                  </button>
+                )}
+
+                {/* Recruiter: manage own jobs */}
+                {canManage && (
+                  <>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => navigate(`/jobs/${id}/edit`)}
+                      id="edit-job-btn"
+                    >
+                      ✏️ Edit Job
+                    </button>
+                    <button
+                      className="btn btn-danger"
+                      onClick={() => setDeleteModal(true)}
+                      id="delete-job-btn"
+                    >
+                      🗑️ Delete Job
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => { setShowApps(s => !s); fetchApplications(); }}
+                      id="view-applications-btn"
+                    >
+                      👥 Applications ({applications.length})
+                    </button>
+                  </>
+                )}
+
+                {/* Not logged in: prompt to login */}
+                {!user && (
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => navigate('/login')}
+                    id="login-to-apply-btn"
+                  >
+                    🔐 Sign In to Apply
+                  </button>
+                )}
               </div>
 
-              {/* Applications List (toggled) */}
-              {showApps && (
+              {/* Applications List (recruiter toggled) */}
+              {showApps && canManage && (
                 <div style={{ marginTop: '24px' }}>
                   <div className="section-heading">Applications Received</div>
                   {applications.length === 0 ? (
@@ -166,6 +250,9 @@ export default function JobDetailPage() {
                         <div className="applicant-name">👤 {app.name}</div>
                         <div className="applicant-info">📧 {app.email} &nbsp; 📞 {app.phone}</div>
                         <div className="applicant-info">🕒 Applied {formatDate(app.createdAt)}</div>
+                        <div className="applicant-info">
+                          Status: <span className={`status-badge status-${app.status?.toLowerCase()}`}>{app.status}</span>
+                        </div>
                       </div>
                     ))
                   )}
@@ -176,11 +263,33 @@ export default function JobDetailPage() {
 
           {/* SIDEBAR */}
           <div className="apply-sidebar">
-            <div className="apply-card">
-              <h3>Apply for this Role</h3>
-              <p className="subtitle">Fill in your details and we'll get back to you.</p>
-              <ApplicationForm jobId={id} onSuccess={fetchApplications} />
-            </div>
+            {/* Apply Card — only for candidates */}
+            {isCandidate ? (
+              <div className="apply-card">
+                <h3>Apply for this Role</h3>
+                <p className="subtitle">Fill in your details and we'll get back to you.</p>
+                <ApplicationForm jobId={id} onSuccess={fetchApplications} />
+              </div>
+            ) : !user ? (
+              <div className="apply-card">
+                <h3>Interested in this job?</h3>
+                <p className="subtitle">Sign in or create a candidate account to apply.</p>
+                <button
+                  className="btn btn-primary"
+                  style={{ width: '100%', marginTop: '8px' }}
+                  onClick={() => navigate('/login')}
+                >
+                  🔐 Sign In to Apply
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  style={{ width: '100%', marginTop: '8px' }}
+                  onClick={() => navigate('/register')}
+                >
+                  ✨ Create Account
+                </button>
+              </div>
+            ) : null}
 
             {/* Quick Info Card */}
             <div className="apply-card">
