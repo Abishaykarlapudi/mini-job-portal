@@ -36,6 +36,11 @@ const jobSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    postedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: false, // optional for backward compat with existing seed data
+    },
   },
   { timestamps: true }
 );
