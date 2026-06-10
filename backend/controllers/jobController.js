@@ -3,6 +3,7 @@ const Application = require('../models/Application');
 
 // @desc  Get all jobs (with search, filter, sort, pagination)
 // @route GET /api/jobs
+// @access Public
 const getJobs = async (req, res, next) => {
   try {
     const {
@@ -42,6 +43,7 @@ const getJobs = async (req, res, next) => {
 
     const total = await Job.countDocuments(query);
     const jobs = await Job.find(query)
+      .populate('postedBy', 'name email')
       .sort(sortObj)
       .skip(skip)
       .limit(limitNum);
@@ -60,9 +62,10 @@ const getJobs = async (req, res, next) => {
 
 // @desc  Get single job
 // @route GET /api/jobs/:id
+// @access Public
 const getJobById = async (req, res, next) => {
   try {
-    const job = await Job.findById(req.params.id);
+    const job = await Job.findById(req.params.id).populate('postedBy', 'name email');
     if (!job) {
       return res.status(404).json({ success: false, message: 'Job not found' });
     }
@@ -74,10 +77,20 @@ const getJobById = async (req, res, next) => {
 
 // @desc  Create a new job
 // @route POST /api/jobs
+// @access Private (recruiter only)
 const createJob = async (req, res, next) => {
   try {
     const { title, company, location, type, salary, description, logoUrl } = req.body;
-    const job = await Job.create({ title, company, location, type, salary, description, logoUrl });
+    const job = await Job.create({
+      title,
+      company,
+      location,
+      type,
+      salary,
+      description,
+      logoUrl,
+      postedBy: req.user.id,
+    });
     res.status(201).json({ success: true, data: job });
   } catch (err) {
     next(err);
@@ -86,16 +99,27 @@ const createJob = async (req, res, next) => {
 
 // @desc  Update a job
 // @route PUT /api/jobs/:id
+// @access Private (recruiter, own job only)
 const updateJob = async (req, res, next) => {
   try {
-    const job = await Job.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    });
+    const job = await Job.findById(req.params.id);
     if (!job) {
       return res.status(404).json({ success: false, message: 'Job not found' });
     }
-    res.json({ success: true, data: job });
+
+    // Ownership check — allow if postedBy matches or job has no owner (legacy)
+    if (job.postedBy && !job.postedBy.equals(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to edit this job.',
+      });
+    }
+
+    const updated = await Job.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+    res.json({ success: true, data: updated });
   } catch (err) {
     next(err);
   }
@@ -103,12 +127,23 @@ const updateJob = async (req, res, next) => {
 
 // @desc  Delete a job
 // @route DELETE /api/jobs/:id
+// @access Private (recruiter, own job only)
 const deleteJob = async (req, res, next) => {
   try {
-    const job = await Job.findByIdAndDelete(req.params.id);
+    const job = await Job.findById(req.params.id);
     if (!job) {
       return res.status(404).json({ success: false, message: 'Job not found' });
     }
+
+    // Ownership check
+    if (job.postedBy && !job.postedBy.equals(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to delete this job.',
+      });
+    }
+
+    await job.deleteOne();
     // Also delete all applications for this job
     await Application.deleteMany({ jobId: req.params.id });
     res.json({ success: true, message: 'Job deleted successfully' });
@@ -119,6 +154,7 @@ const deleteJob = async (req, res, next) => {
 
 // @desc  Apply to a job
 // @route POST /api/jobs/:id/apply
+// @access Private (candidate only)
 const applyToJob = async (req, res, next) => {
   try {
     const job = await Job.findById(req.params.id);
@@ -128,8 +164,14 @@ const applyToJob = async (req, res, next) => {
 
     const { name, email, phone } = req.body;
 
-    // Check for duplicate application
-    const existing = await Application.findOne({ jobId: req.params.id, email });
+    // Check for duplicate application by user or email
+    const existing = await Application.findOne({
+      jobId: req.params.id,
+      $or: [
+        { applicantId: req.user.id },
+        { email: req.user.email },
+      ],
+    });
     if (existing) {
       return res.status(400).json({
         success: false,
@@ -139,8 +181,9 @@ const applyToJob = async (req, res, next) => {
 
     const application = await Application.create({
       jobId: req.params.id,
-      name,
-      email,
+      applicantId: req.user.id,
+      name: name || req.user.name,
+      email: email || req.user.email,
       phone,
     });
 
@@ -152,6 +195,7 @@ const applyToJob = async (req, res, next) => {
 
 // @desc  Get all applications for a job
 // @route GET /api/jobs/:id/applications
+// @access Private (recruiter only)
 const getApplications = async (req, res, next) => {
   try {
     const job = await Job.findById(req.params.id);
@@ -159,8 +203,38 @@ const getApplications = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Job not found' });
     }
 
-    const applications = await Application.find({ jobId: req.params.id }).sort({ createdAt: -1 });
+    const applications = await Application.find({ jobId: req.params.id })
+      .populate('applicantId', 'name email')
+      .sort({ createdAt: -1 });
+
     res.json({ success: true, count: applications.length, data: applications });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc  Update application status
+// @route PATCH /api/jobs/:id/applications/:appId
+// @access Private (recruiter only)
+const updateApplicationStatus = async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    const allowedStatuses = ['Pending', 'Reviewed', 'Accepted', 'Rejected'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status value' });
+    }
+
+    const application = await Application.findByIdAndUpdate(
+      req.params.appId,
+      { status },
+      { new: true, runValidators: true }
+    );
+
+    if (!application) {
+      return res.status(404).json({ success: false, message: 'Application not found' });
+    }
+
+    res.json({ success: true, data: application });
   } catch (err) {
     next(err);
   }
@@ -174,4 +248,5 @@ module.exports = {
   deleteJob,
   applyToJob,
   getApplications,
+  updateApplicationStatus,
 };

@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { protect, authorize } = require('../middleware/auth');
 const {
   getJobs,
   getJobById,
@@ -8,14 +9,21 @@ const {
   deleteJob,
   applyToJob,
   getApplications,
+  updateApplicationStatus,
 } = require('../controllers/jobController');
 
-// Job CRUD
-router.route('/').get(getJobs).post(createJob);
-router.route('/:id').get(getJobById).put(updateJob).delete(deleteJob);
+// Public routes
+router.get('/', getJobs);
+router.get('/:id', getJobById);
 
-// Applications
-router.route('/:id/apply').post(applyToJob);
-router.route('/:id/applications').get(getApplications);
+// Recruiter-only routes
+router.post('/', protect, authorize('recruiter'), createJob);
+router.put('/:id', protect, authorize('recruiter'), updateJob);
+router.delete('/:id', protect, authorize('recruiter'), deleteJob);
+router.get('/:id/applications', protect, authorize('recruiter'), getApplications);
+router.patch('/:id/applications/:appId', protect, authorize('recruiter'), updateApplicationStatus);
+
+// Candidate-only routes
+router.post('/:id/apply', protect, authorize('candidate'), applyToJob);
 
 module.exports = router;

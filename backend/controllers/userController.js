@@ -1,0 +1,122 @@
+const Job = require('../models/Job');
+const Application = require('../models/Application');
+const SavedJob = require('../models/SavedJob');
+
+// @desc  Role-aware dashboard
+// @route GET /api/user/dashboard
+// @access Private
+const getDashboard = async (req, res, next) => {
+  try {
+    if (req.user.role === 'recruiter') {
+      // --- Recruiter Dashboard ---
+      const postedJobs = await Job.find({ postedBy: req.user.id }).sort({ createdAt: -1 });
+
+      // For each job, count applications
+      const jobsWithCounts = await Promise.all(
+        postedJobs.map(async (job) => {
+          const appCount = await Application.countDocuments({ jobId: job._id });
+          return { ...job.toObject(), applicationCount: appCount };
+        })
+      );
+
+      const totalApplications = jobsWithCounts.reduce(
+        (sum, j) => sum + j.applicationCount,
+        0
+      );
+
+      return res.json({
+        success: true,
+        role: 'recruiter',
+        stats: {
+          totalJobsPosted: postedJobs.length,
+          totalApplicationsReceived: totalApplications,
+        },
+        jobs: jobsWithCounts,
+      });
+    }
+
+    // --- Candidate Dashboard ---
+    const applications = await Application.find({ applicantId: req.user.id })
+      .populate('jobId', 'title company location type salary')
+      .sort({ createdAt: -1 });
+
+    const savedJobDocs = await SavedJob.find({ userId: req.user.id })
+      .populate('jobId', 'title company location type salary logoUrl')
+      .sort({ createdAt: -1 });
+
+    return res.json({
+      success: true,
+      role: 'candidate',
+      stats: {
+        totalApplications: applications.length,
+        totalSavedJobs: savedJobDocs.length,
+      },
+      applications,
+      savedJobs: savedJobDocs,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc  Save a job
+// @route POST /api/user/saved-jobs/:jobId
+// @access Private (candidate)
+const saveJob = async (req, res, next) => {
+  try {
+    const job = await Job.findById(req.params.jobId);
+    if (!job) {
+      return res.status(404).json({ success: false, message: 'Job not found' });
+    }
+
+    // Will throw on duplicate (unique index)
+    const saved = await SavedJob.create({
+      userId: req.user.id,
+      jobId: req.params.jobId,
+    });
+
+    res.status(201).json({ success: true, data: saved });
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ success: false, message: 'Job already saved' });
+    }
+    next(err);
+  }
+};
+
+// @desc  Unsave a job
+// @route DELETE /api/user/saved-jobs/:jobId
+// @access Private (candidate)
+const unsaveJob = async (req, res, next) => {
+  try {
+    const result = await SavedJob.findOneAndDelete({
+      userId: req.user.id,
+      jobId: req.params.jobId,
+    });
+
+    if (!result) {
+      return res.status(404).json({ success: false, message: 'Saved job not found' });
+    }
+
+    res.json({ success: true, message: 'Job removed from saved list' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc  Get saved jobs list
+// @route GET /api/user/saved-jobs
+// @access Private (candidate)
+const getSavedJobs = async (req, res, next) => {
+  try {
+    const savedJobs = await SavedJob.find({ userId: req.user.id })
+      .populate('jobId', 'title company location type salary logoUrl createdAt')
+      .sort({ createdAt: -1 });
+
+    res.json({ success: true, count: savedJobs.length, data: savedJobs });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getDashboard, saveJob, unsaveJob, getSavedJobs };
