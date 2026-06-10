@@ -1,9 +1,15 @@
 import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 const EMPTY = { name: '', email: '', phone: '' };
 
 export default function ApplicationForm({ jobId, onSuccess }) {
-  const [form, setForm] = useState(EMPTY);
+  const { user, token } = useAuth();
+  const [form, setForm] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+    phone: '',
+  });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null); // 'success' | 'error' | null
@@ -33,13 +39,16 @@ export default function ApplicationForm({ jobId, onSuccess }) {
     try {
       const res = await fetch(`http://localhost:5000/api/jobs/${jobId}/apply`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(form),
       });
       const data = await res.json();
       if (data.success) {
         setStatus('success');
-        setForm(EMPTY);
+        setForm({ name: user?.name || '', email: user?.email || '', phone: '' });
         if (onSuccess) onSuccess();
       } else {
         setStatus({ type: 'error', msg: data.message || 'Application failed' });
