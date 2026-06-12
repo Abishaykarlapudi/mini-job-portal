@@ -33,9 +33,11 @@ function Navbar({ theme, toggleTheme }) {
         </a>
 
         <div className="navbar-links">
-          <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-            Browse Jobs
-          </NavLink>
+          {!isRecruiter && (
+            <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              Browse Jobs
+            </NavLink>
+          )}
           {user && (
             <NavLink to="/dashboard" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               Dashboard

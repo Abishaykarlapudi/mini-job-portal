@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 
 const EMPTY = { name: '', email: '', phone: '' };
 
-export default function ApplicationForm({ jobId, onSuccess }) {
+export default function ApplicationForm({ jobId, onSuccess, hasApplied }) {
   const { user, token } = useAuth();
   const [form, setForm] = useState({
     name: user?.name || '',
@@ -60,10 +60,22 @@ export default function ApplicationForm({ jobId, onSuccess }) {
     }
   };
 
-  if (status === 'success') {
+  if (hasApplied || status === 'success') {
     return (
-      <div className="alert alert-success" id="apply-success-msg">
-        🎉 Application submitted successfully! Good luck!
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1))',
+        border: '1.5px solid rgba(16,185,129,0.4)',
+        borderRadius: '12px',
+        padding: '20px',
+        textAlign: 'center',
+      }} id="apply-success-msg">
+        <div style={{ fontSize: '2rem', marginBottom: '8px' }}>✅</div>
+        <div style={{ fontWeight: '700', fontSize: '1rem', color: 'var(--success, #10b981)', marginBottom: '4px' }}>
+          You have already applied!
+        </div>
+        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+          Your application is under review. We'll notify you of any updates.
+        </div>
       </div>
     );
   }

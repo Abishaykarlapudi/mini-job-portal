@@ -8,6 +8,7 @@ const {
   updateJob,
   deleteJob,
   applyToJob,
+  checkApplied,
   getApplications,
   updateApplicationStatus,
 } = require('../controllers/jobController');
@@ -25,5 +26,6 @@ router.patch('/:id/applications/:appId', protect, authorize('recruiter'), update
 
 // Candidate-only routes
 router.post('/:id/apply', protect, authorize('candidate'), applyToJob);
+router.get('/:id/applied', protect, authorize('candidate'), checkApplied);
 
 module.exports = router;

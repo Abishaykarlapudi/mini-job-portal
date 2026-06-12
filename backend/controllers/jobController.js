@@ -80,7 +80,7 @@ const getJobById = async (req, res, next) => {
 // @access Private (recruiter only)
 const createJob = async (req, res, next) => {
   try {
-    const { title, company, location, type, salary, description, logoUrl } = req.body;
+    const { title, company, location, type, salary, description, logoUrl, openings } = req.body;
     const job = await Job.create({
       title,
       company,
@@ -89,6 +89,9 @@ const createJob = async (req, res, next) => {
       salary,
       description,
       logoUrl,
+      openings: ['unknown', 'below-100', 'above-100', null, undefined].includes(openings)
+        ? null
+        : Number(openings),
       postedBy: req.user.id,
     });
     res.status(201).json({ success: true, data: job });
@@ -116,7 +119,7 @@ const updateJob = async (req, res, next) => {
     }
 
     const updated = await Job.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     });
     res.json({ success: true, data: updated });
@@ -224,17 +227,67 @@ const updateApplicationStatus = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Invalid status value' });
     }
 
+    // Find the application first to check current status
+    const existing = await Application.findById(req.params.appId);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Application not found' });
+    }
+
+    // Lock: once Accepted or Rejected, status cannot be changed
+    if (['Accepted', 'Rejected'].includes(existing.status)) {
+      return res.status(403).json({
+        success: false,
+        message: `This application has already been ${existing.status.toLowerCase()}. The decision cannot be changed.`,
+        locked: true,
+      });
+    }
+
     const application = await Application.findByIdAndUpdate(
       req.params.appId,
       { status },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     );
 
     if (!application) {
       return res.status(404).json({ success: false, message: 'Application not found' });
     }
 
-    res.json({ success: true, data: application });
+    // Auto-delete job if accepted count reaches openings limit
+    let jobAutoDeleted = false;
+    if (status === 'Accepted') {
+      const job = await Job.findById(req.params.id);
+      if (job && job.openings !== null) {
+        const acceptedCount = await Application.countDocuments({
+          jobId: req.params.id,
+          status: 'Accepted',
+        });
+        if (acceptedCount >= job.openings) {
+          await Application.deleteMany({ jobId: req.params.id });
+          await job.deleteOne();
+          jobAutoDeleted = true;
+        }
+      }
+    }
+
+    res.json({ success: true, data: application, jobAutoDeleted });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc  Check if current candidate already applied to a job
+// @route GET /api/jobs/:id/applied
+// @access Private (candidate)
+const checkApplied = async (req, res, next) => {
+  try {
+    const existing = await Application.findOne({
+      jobId: req.params.id,
+      $or: [
+        { applicantId: req.user.id },
+        { email: req.user.email },
+      ],
+    });
+    res.json({ hasApplied: !!existing });
   } catch (err) {
     next(err);
   }
@@ -247,6 +300,7 @@ module.exports = {
   updateJob,
   deleteJob,
   applyToJob,
+  checkApplied,
   getApplications,
   updateApplicationStatus,
 };

@@ -4,7 +4,7 @@ const TYPES = ['Full-time', 'Part-time', 'Remote', 'Internship', 'Contract'];
 
 const EMPTY = {
   title: '', company: '', location: '', type: 'Full-time',
-  salary: '', description: '', logoUrl: '',
+  salary: '', description: '', logoUrl: '', openings: 'unknown',
 };
 
 export default function JobForm({ initialData = {}, onSubmit, loading, submitLabel = 'Submit' }) {
@@ -109,14 +109,43 @@ export default function JobForm({ initialData = {}, onSubmit, loading, submitLab
         </div>
 
         <div className="form-group">
-          <label className="form-label" htmlFor="logoUrl">Company Logo URL</label>
-          <input
-            id="logoUrl" name="logoUrl" type="url"
-            className="form-input"
-            placeholder="https://example.com/logo.png"
-            value={form.logoUrl} onChange={handleChange}
-          />
+          <label className="form-label" htmlFor="openings">
+            How many people do you need? <span className="required">*</span>
+          </label>
+          <select
+            id="openings" name="openings"
+            className="form-select"
+            value={form.openings ?? 'unknown'}
+            onChange={handleChange}
+          >
+            <option value="unknown">🤷 I don't know yet</option>
+            {Array.from({ length: 50 }, (_, i) => i + 1).map(n => (
+              <option key={n} value={n}>{n} {n === 1 ? 'person' : 'people'}</option>
+            ))}
+            <option value="below-100">Below 100 people</option>
+            <option value="above-100">Above 100 people</option>
+          </select>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+            {form.openings === 'unknown' || !form.openings
+              ? '💡 Job stays open until you manually close it'
+              : form.openings === 'below-100'
+              ? '💡 Job stays open — you can close it manually when ready'
+              : form.openings === 'above-100'
+              ? '💡 Job stays open — you can close it manually when ready'
+              : `✅ Job auto-closes after ${form.openings} candidate${Number(form.openings) > 1 ? 's are' : ' is'} accepted`
+            }
+          </span>
         </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label" htmlFor="logoUrl">Company Logo URL</label>
+        <input
+          id="logoUrl" name="logoUrl" type="url"
+          className="form-input"
+          placeholder="https://example.com/logo.png"
+          value={form.logoUrl} onChange={handleChange}
+        />
       </div>
 
       <div className="form-group">

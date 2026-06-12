@@ -36,6 +36,11 @@ const jobSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    openings: {
+      type: Number,
+      default: null, // null = "I don't know"
+      min: [1, 'Openings must be at least 1'],
+    },
     postedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

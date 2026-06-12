@@ -37,6 +37,7 @@ export default function JobDetailPage() {
   const [saved, setSaved] = useState(false);
   const [savingJob, setSavingJob] = useState(false);
   const [savedJobId, setSavedJobId] = useState(null);
+  const [hasApplied, setHasApplied] = useState(false);
 
   const fetchJob = async () => {
     setLoading(true);
@@ -74,10 +75,23 @@ export default function JobDetailPage() {
     } catch { /* ignore */ }
   };
 
+  // Check if the current candidate already applied to this job
+  const checkAppliedStatus = async () => {
+    if (!isCandidate || !token) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/jobs/${id}/applied`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.hasApplied) setHasApplied(true);
+    } catch { /* ignore */ }
+  };
+
   useEffect(() => {
     fetchJob();
     fetchApplications();
     checkSavedStatus();
+    checkAppliedStatus();
   }, [id, token]);
 
   const handleDelete = async () => {
@@ -268,7 +282,7 @@ export default function JobDetailPage() {
               <div className="apply-card">
                 <h3>Apply for this Role</h3>
                 <p className="subtitle">Fill in your details and we'll get back to you.</p>
-                <ApplicationForm jobId={id} onSuccess={fetchApplications} />
+                <ApplicationForm jobId={id} onSuccess={() => { fetchApplications(); setHasApplied(true); }} hasApplied={hasApplied} />
               </div>
             ) : !user ? (
               <div className="apply-card">

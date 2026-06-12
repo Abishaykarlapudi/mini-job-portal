@@ -70,16 +70,20 @@ const login = async (req, res, next) => {
 // @desc   Get current logged-in user
 // @route  GET /api/auth/me
 // @access Private
-const getMe = async (req, res) => {
-  res.json({
-    success: true,
-    user: {
-      id: req.user._id,
-      name: req.user.name,
-      email: req.user.email,
-      role: req.user.role,
-    },
-  });
+const getMe = async (req, res, next) => {
+  try {
+    res.json({
+      success: true,
+      user: {
+        id: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+        role: req.user.role,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
 };
 
 module.exports = { register, login, getMe };
