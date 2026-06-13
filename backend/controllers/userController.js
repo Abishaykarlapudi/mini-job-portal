@@ -1,6 +1,7 @@
 const Job = require('../models/Job');
 const Application = require('../models/Application');
 const SavedJob = require('../models/SavedJob');
+const ActivityLog = require('../models/ActivityLog');
 
 // @desc  Role-aware dashboard
 // @route GET /api/user/dashboard
@@ -11,7 +12,6 @@ const getDashboard = async (req, res, next) => {
       // --- Recruiter Dashboard ---
       const postedJobs = await Job.find({ postedBy: req.user.id }).sort({ createdAt: -1 });
 
-      // For each job, count applications
       const jobsWithCounts = await Promise.all(
         postedJobs.map(async (job) => {
           const appCount = await Application.countDocuments({ jobId: job._id });
@@ -19,19 +19,32 @@ const getDashboard = async (req, res, next) => {
         })
       );
 
-      const totalApplications = jobsWithCounts.reduce(
-        (sum, j) => sum + j.applicationCount,
-        0
-      );
+      const totalApplications = jobsWithCounts.reduce((sum, j) => sum + j.applicationCount, 0);
+      const activeJobs = postedJobs.filter(j => j.status === 'Open').length;
+      const closedJobs = postedJobs.filter(j => j.status === 'Closed').length;
+
+      const jobIds = postedJobs.map(j => j._id);
+      const shortlistedCount = await Application.countDocuments({ jobId: { $in: jobIds }, status: 'Shortlisted' });
+      const hiredCount = await Application.countDocuments({ jobId: { $in: jobIds }, status: 'Hired' });
+
+      // Recent activity (last 10)
+      const recentActivity = await ActivityLog.find({ recruiterId: req.user.id })
+        .sort({ createdAt: -1 })
+        .limit(10);
 
       return res.json({
         success: true,
         role: 'recruiter',
         stats: {
           totalJobsPosted: postedJobs.length,
+          activeJobs,
+          closedJobs,
           totalApplicationsReceived: totalApplications,
+          shortlistedCount,
+          hiredCount,
         },
         jobs: jobsWithCounts,
+        recentActivity,
       });
     }
 
@@ -54,9 +67,7 @@ const getDashboard = async (req, res, next) => {
       applications,
       savedJobs: savedJobDocs,
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };
 
 // @desc  Save a job
@@ -65,16 +76,9 @@ const getDashboard = async (req, res, next) => {
 const saveJob = async (req, res, next) => {
   try {
     const job = await Job.findById(req.params.jobId);
-    if (!job) {
-      return res.status(404).json({ success: false, message: 'Job not found' });
-    }
+    if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
 
-    // Will throw on duplicate (unique index)
-    const saved = await SavedJob.create({
-      userId: req.user.id,
-      jobId: req.params.jobId,
-    });
-
+    const saved = await SavedJob.create({ userId: req.user.id, jobId: req.params.jobId });
     res.status(201).json({ success: true, data: saved });
   } catch (err) {
     if (err.code === 11000) {
@@ -89,19 +93,10 @@ const saveJob = async (req, res, next) => {
 // @access Private (candidate)
 const unsaveJob = async (req, res, next) => {
   try {
-    const result = await SavedJob.findOneAndDelete({
-      userId: req.user.id,
-      jobId: req.params.jobId,
-    });
-
-    if (!result) {
-      return res.status(404).json({ success: false, message: 'Saved job not found' });
-    }
-
+    const result = await SavedJob.findOneAndDelete({ userId: req.user.id, jobId: req.params.jobId });
+    if (!result) return res.status(404).json({ success: false, message: 'Saved job not found' });
     res.json({ success: true, message: 'Job removed from saved list' });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };
 
 // @desc  Get saved jobs list
@@ -112,11 +107,8 @@ const getSavedJobs = async (req, res, next) => {
     const savedJobs = await SavedJob.find({ userId: req.user.id })
       .populate('jobId', 'title company location type salary logoUrl createdAt')
       .sort({ createdAt: -1 });
-
     res.json({ success: true, count: savedJobs.length, data: savedJobs });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };
 
 module.exports = { getDashboard, saveJob, unsaveJob, getSavedJobs };
