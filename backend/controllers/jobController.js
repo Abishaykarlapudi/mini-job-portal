@@ -204,6 +204,19 @@ const updateApplicationStatus = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Invalid status value' });
     }
 
+    // ── Lock check: first read the current status ─────────────────────────
+    const existing = await Application.findById(req.params.appId);
+    if (!existing) return res.status(404).json({ success: false, message: 'Application not found' });
+
+    // Once Hired or Rejected the decision is permanent
+    if (['Hired', 'Rejected'].includes(existing.status)) {
+      return res.status(403).json({
+        success: false,
+        locked: true,
+        message: `This application has already been ${existing.status.toLowerCase()}. The decision cannot be changed.`,
+      });
+    }
+
     const application = await Application.findByIdAndUpdate(
       req.params.appId,
       { status },
@@ -394,10 +407,21 @@ const bulkUpdateStatus = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Invalid status value' });
     }
 
-    await Application.updateMany({ _id: { $in: appIds } }, { status });
-    await logActivity(req.user.id, `Bulk updated ${appIds.length} applicants to ${status}`, 'application', null);
+    // Only update applications that are NOT already Hired or Rejected (locked)
+    const result = await Application.updateMany(
+      { _id: { $in: appIds }, status: { $nin: ['Hired', 'Rejected'] } },
+      { status }
+    );
 
-    res.json({ success: true, message: `Updated ${appIds.length} applications to ${status}` });
+    const skipped = appIds.length - result.modifiedCount;
+    await logActivity(req.user.id, `Bulk updated ${result.modifiedCount} applicants to ${status}${skipped > 0 ? ` (${skipped} skipped — already finalised)` : ''}`, 'application', null);
+
+    res.json({
+      success: true,
+      updated: result.modifiedCount,
+      skipped,
+      message: `Updated ${result.modifiedCount} application(s) to ${status}${skipped > 0 ? `. ${skipped} skipped (already Hired/Rejected).` : '.'}`,
+    });
   } catch (err) { next(err); }
 };
 

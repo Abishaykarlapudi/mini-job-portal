@@ -329,6 +329,12 @@ export default function RecruiterDashboard() {
 
   const updateStatus = async (jobId, appId, status) => {
     const res = await api.updateApplicationStatus(jobId, appId, status, token);
+    if (res.locked) {
+      // Backend rejected — decision is already final
+      showToast(`🔒 ${res.message}`, 'error');
+      setConfirmModal(null);
+      return;
+    }
     if (res.success) {
       if (res.jobAutoDeleted) {
         setData(prev => ({ ...prev, jobs: prev.jobs.filter(j => j._id !== jobId), stats: { ...prev.stats, totalJobsPosted: Math.max(0, (prev.stats?.totalJobsPosted ?? 1) - 1) } }));
@@ -389,7 +395,10 @@ export default function RecruiterDashboard() {
     if (!appIds.length) return;
     const res = await api.bulkUpdateStatus(jobId, appIds, status, token);
     if (res.success) {
-      showToast(`✅ ${appIds.length} applicants updated to ${status}`);
+      const msg = res.skipped > 0
+        ? `✅ ${res.updated} updated. 🔒 ${res.skipped} skipped (already Hired/Rejected).`
+        : `✅ ${res.updated} applicant${res.updated !== 1 ? 's' : ''} updated to ${status}`;
+      showToast(msg, res.skipped > 0 ? 'error' : 'success');
       setSelectedApps(prev => ({ ...prev, [jobId]: new Set() }));
       await reloadApplications(jobId);
       const dashRes = await api.getDashboard(token);
