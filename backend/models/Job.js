@@ -38,13 +38,22 @@ const jobSchema = new mongoose.Schema(
     },
     openings: {
       type: Number,
-      default: null, // null = "I don't know"
+      default: null,
       min: [1, 'Openings must be at least 1'],
+    },
+    status: {
+      type: String,
+      enum: ['Open', 'Closed'],
+      default: 'Open',
+    },
+    tags: {
+      type: [String],
+      default: [],
     },
     postedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: false, // optional for backward compat with existing seed data
+      required: false,
     },
   },
   { timestamps: true }
