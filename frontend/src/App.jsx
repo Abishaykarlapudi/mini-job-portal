@@ -11,6 +11,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import RecruiterDashboard from './pages/RecruiterDashboard';
 import CandidateDashboard from './pages/CandidateDashboard';
+import AnalyticsPage from './pages/AnalyticsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function Navbar({ theme, toggleTheme }) {
@@ -46,6 +47,11 @@ function Navbar({ theme, toggleTheme }) {
           {isRecruiter && (
             <NavLink to="/jobs/create" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               Post a Job
+            </NavLink>
+          )}
+          {isRecruiter && (
+            <NavLink to="/analytics" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} id="nav-analytics">
+              📊 Analytics
             </NavLink>
           )}
         </div>
@@ -127,6 +133,9 @@ function App() {
           } />
           <Route path="/jobs/:id/edit" element={
             <ProtectedRoute role="recruiter"><EditJobPage /></ProtectedRoute>
+          } />
+          <Route path="/analytics" element={
+            <ProtectedRoute role="recruiter"><AnalyticsPage /></ProtectedRoute>
           } />
         </Routes>
       </Router>
