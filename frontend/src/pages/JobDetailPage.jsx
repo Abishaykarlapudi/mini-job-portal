@@ -79,7 +79,7 @@ export default function JobDetailPage() {
   const checkAppliedStatus = async () => {
     if (!isCandidate || !token) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/jobs/${id}/applied`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:5000/api'}/jobs/${id}/applied`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();

@@ -37,7 +37,7 @@ export default function ApplicationForm({ jobId, onSuccess, hasApplied }) {
     setLoading(true);
     setStatus(null);
     try {
-      const res = await fetch(`http://localhost:5000/api/jobs/${jobId}/apply`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:5000/api'}/jobs/${jobId}/apply`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
