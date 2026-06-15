@@ -4,10 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 
 const STATUS_COLORS = {
-  Pending: 'status-pending',
-  Reviewed: 'status-reviewed',
-  Accepted: 'status-accepted',
+  Applied: 'status-applied',
+  'Under Review': 'status-under-review',
+  Shortlisted: 'status-shortlisted',
+  'Interview Scheduled': 'status-interview-scheduled',
   Rejected: 'status-rejected',
+  Hired: 'status-hired',
+  Accepted: 'status-accepted',
 };
 
 export default function CandidateDashboard() {
@@ -148,6 +151,13 @@ export default function CandidateDashboard() {
         {/* Tabs */}
         <div className="dashboard-tabs" id="dashboard-tabs">
           <button
+            className={`tab-btn ${activeTab === 'profile' ? 'active' : ''}`}
+            onClick={() => setActiveTab('profile')}
+            id="tab-profile"
+          >
+            👤 Edit Profile
+          </button>
+          <button
             className={`tab-btn ${activeTab === 'applications' ? 'active' : ''}`}
             onClick={() => setActiveTab('applications')}
             id="tab-applications"
@@ -160,13 +170,6 @@ export default function CandidateDashboard() {
             id="tab-saved"
           >
             🔖 Saved Jobs ({data?.stats?.totalSavedJobs ?? 0})
-          </button>
-          <button
-            className={`tab-btn ${activeTab === 'profile' ? 'active' : ''}`}
-            onClick={() => setActiveTab('profile')}
-            id="tab-profile"
-          >
-            👤 Edit Profile
           </button>
         </div>
 
@@ -202,9 +205,54 @@ export default function CandidateDashboard() {
                         <div className="app-date">
                           Applied on {new Date(app.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
                         </div>
+
+                        {/* ── Interview Details (shown when recruiter schedules) ── */}
+                        {app.status === 'Interview Scheduled' && app.interview && (
+                          <div className="interview-details-card">
+                            <div className="interview-details-header">
+                              📅 <strong>Interview Scheduled</strong>
+                            </div>
+                            <div className="interview-details-body">
+                              <div className="interview-detail-row">
+                                <span className="idr-label">📆 Date</span>
+                                <span className="idr-value">
+                                  {new Date(app.interview.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
+                                </span>
+                              </div>
+                              <div className="interview-detail-row">
+                                <span className="idr-label">⏰ Time</span>
+                                <span className="idr-value">{app.interview.time}</span>
+                              </div>
+                              <div className="interview-detail-row">
+                                <span className="idr-label">📡 Mode</span>
+                                <span className="idr-value">{app.interview.mode}</span>
+                              </div>
+                              {app.interview.mode === 'Online' && app.interview.meetingLink && (
+                                <div className="interview-detail-row">
+                                  <span className="idr-label">🔗 Link</span>
+                                  <a href={app.interview.meetingLink} target="_blank" rel="noreferrer" className="idr-link">
+                                    Join Meeting
+                                  </a>
+                                </div>
+                              )}
+                              {app.interview.mode === 'Offline' && app.interview.location && (
+                                <div className="interview-detail-row">
+                                  <span className="idr-label">📍 Venue</span>
+                                  <span className="idr-value">{app.interview.location}</span>
+                                </div>
+                              )}
+                              {app.interview.remarks && (
+                                <div className="interview-detail-row">
+                                  <span className="idr-label">📝 Remarks</span>
+                                  <span className="idr-value">{app.interview.remarks}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="application-card-right">
-                        <span className={`status-badge ${STATUS_COLORS[app.status]}`}>{app.status}</span>
+                        <span className={`status-badge ${STATUS_COLORS[app.status] || ''}`}>{app.status}</span>
                         {job?._id && (
                           <button className="btn btn-sm btn-secondary" onClick={() => navigate(`/jobs/${job._id}`)}>
                             View Job
