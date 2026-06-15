@@ -111,4 +111,32 @@ const getSavedJobs = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getDashboard, saveJob, unsaveJob, getSavedJobs };
+const User = require('../models/User');
+
+// @desc  Update own profile (name, email, password)
+// @route PUT /api/user/profile
+// @access Private
+const updateProfile = async (req, res, next) => {
+  try {
+    const { name, email, currentPassword, newPassword } = req.body;
+    const user = await User.findById(req.user.id).select('+password');
+
+    if (name) user.name = name;
+    if (email) user.email = email;
+
+    if (newPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({ success: false, message: 'Current password is required to set a new password' });
+      }
+      const isMatch = await user.matchPassword(currentPassword);
+      if (!isMatch) return res.status(401).json({ success: false, message: 'Current password is incorrect' });
+      user.password = newPassword;
+    }
+
+    await user.save();
+    res.json({ success: true, message: 'Profile updated successfully', user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+  } catch (err) { next(err); }
+};
+
+module.exports = { getDashboard, saveJob, unsaveJob, getSavedJobs, updateProfile };
+

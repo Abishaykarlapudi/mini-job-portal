@@ -11,13 +11,18 @@ const STATUS_COLORS = {
 };
 
 export default function CandidateDashboard() {
-  const { user, token } = useAuth();
+  const { user, token, login } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('applications');
   const [unsaving, setUnsaving] = useState(null);
+
+  // Profile edit state
+  const [profileForm, setProfileForm] = useState({ name: '', email: '', currentPassword: '', newPassword: '' });
+  const [profileMsg, setProfileMsg] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   const fetchDashboard = async () => {
     setLoading(true);
@@ -36,6 +41,10 @@ export default function CandidateDashboard() {
     fetchDashboard();
   }, []);
 
+  useEffect(() => {
+    if (user) setProfileForm(f => ({ ...f, name: user.name, email: user.email }));
+  }, [user]);
+
   const handleUnsave = async (jobId) => {
     setUnsaving(jobId);
     try {
@@ -44,14 +53,35 @@ export default function CandidateDashboard() {
         setData((prev) => ({
           ...prev,
           savedJobs: prev.savedJobs.filter((s) => s.jobId?._id !== jobId),
-          stats: {
-            ...prev.stats,
-            totalSavedJobs: prev.stats.totalSavedJobs - 1,
-          },
+          stats: { ...prev.stats, totalSavedJobs: prev.stats.totalSavedJobs - 1 },
         }));
       }
     } finally {
       setUnsaving(null);
+    }
+  };
+
+  const handleProfileSave = async (e) => {
+    e.preventDefault();
+    setProfileLoading(true);
+    setProfileMsg(null);
+    try {
+      const payload = { name: profileForm.name, email: profileForm.email };
+      if (profileForm.newPassword) {
+        payload.currentPassword = profileForm.currentPassword;
+        payload.newPassword = profileForm.newPassword;
+      }
+      const res = await api.updateProfile(payload, token);
+      if (res.success) {
+        setProfileMsg({ type: 'success', text: '✅ Profile updated successfully!' });
+        setProfileForm(f => ({ ...f, currentPassword: '', newPassword: '' }));
+      } else {
+        setProfileMsg({ type: 'error', text: `⚠️ ${res.message}` });
+      }
+    } catch {
+      setProfileMsg({ type: 'error', text: '⚠️ Could not connect to server.' });
+    } finally {
+      setProfileLoading(false);
     }
   };
 
@@ -89,11 +119,7 @@ export default function CandidateDashboard() {
             </h1>
             <p className="dashboard-subtitle">Candidate Dashboard — track your job hunt</p>
           </div>
-          <button
-            className="btn btn-primary"
-            onClick={() => navigate('/')}
-            id="browse-jobs-btn"
-          >
+          <button className="btn btn-primary" onClick={() => navigate('/')} id="browse-jobs-btn">
             🔍 Browse Jobs
           </button>
         </div>
@@ -135,6 +161,13 @@ export default function CandidateDashboard() {
           >
             🔖 Saved Jobs ({data?.stats?.totalSavedJobs ?? 0})
           </button>
+          <button
+            className={`tab-btn ${activeTab === 'profile' ? 'active' : ''}`}
+            onClick={() => setActiveTab('profile')}
+            id="tab-profile"
+          >
+            👤 Edit Profile
+          </button>
         </div>
 
         {/* Applications Tab */}
@@ -146,9 +179,7 @@ export default function CandidateDashboard() {
                 <h3>No applications yet</h3>
                 <p>
                   Browse jobs and apply to get started!{' '}
-                  <button className="link-btn" onClick={() => navigate('/')}>
-                    Find jobs →
-                  </button>
+                  <button className="link-btn" onClick={() => navigate('/')}>Find jobs →</button>
                 </p>
               </div>
             ) : (
@@ -173,14 +204,9 @@ export default function CandidateDashboard() {
                         </div>
                       </div>
                       <div className="application-card-right">
-                        <span className={`status-badge ${STATUS_COLORS[app.status]}`}>
-                          {app.status}
-                        </span>
+                        <span className={`status-badge ${STATUS_COLORS[app.status]}`}>{app.status}</span>
                         {job?._id && (
-                          <button
-                            className="btn btn-sm btn-secondary"
-                            onClick={() => navigate(`/jobs/${job._id}`)}
-                          >
+                          <button className="btn btn-sm btn-secondary" onClick={() => navigate(`/jobs/${job._id}`)}>
                             View Job
                           </button>
                         )}
@@ -202,9 +228,7 @@ export default function CandidateDashboard() {
                 <h3>No saved jobs</h3>
                 <p>
                   Bookmark jobs you're interested in.{' '}
-                  <button className="link-btn" onClick={() => navigate('/')}>
-                    Browse jobs →
-                  </button>
+                  <button className="link-btn" onClick={() => navigate('/')}>Browse jobs →</button>
                 </p>
               </div>
             ) : (
@@ -225,17 +249,12 @@ export default function CandidateDashboard() {
                         <div className="saved-job-meta">
                           <span>🏢 {job?.company}</span>
                           <span>📍 {job?.location}</span>
-                          {job?.salary && job.salary !== 'Not specified' && (
-                            <span>💰 {job.salary}</span>
-                          )}
+                          {job?.salary && job.salary !== 'Not specified' && <span>💰 {job.salary}</span>}
                         </div>
                       </div>
                       <div className="saved-job-actions">
                         {job?._id && (
-                          <button
-                            className="btn btn-sm btn-primary"
-                            onClick={() => navigate(`/jobs/${job._id}`)}
-                          >
+                          <button className="btn btn-sm btn-primary" onClick={() => navigate(`/jobs/${job._id}`)}>
                             Apply Now
                           </button>
                         )}
@@ -253,6 +272,82 @@ export default function CandidateDashboard() {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Edit Profile Tab */}
+        {activeTab === 'profile' && (
+          <div className="dashboard-section" id="profile-panel">
+            <div className="profile-edit-card">
+              <div className="profile-edit-header">
+                <div className="profile-avatar">
+                  {user?.name?.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h2 className="profile-edit-title">Edit Profile</h2>
+                  <p className="profile-edit-sub">Update your name, email or password</p>
+                </div>
+              </div>
+
+              {profileMsg && (
+                <div className={`alert ${profileMsg.type === 'success' ? 'alert-success' : 'alert-error'}`}>
+                  {profileMsg.text}
+                </div>
+              )}
+
+              <form className="profile-edit-form" onSubmit={handleProfileSave} id="profile-form">
+                <div className="form-group">
+                  <label className="form-label">Full Name</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={profileForm.name}
+                    onChange={e => setProfileForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="Your name"
+                    id="profile-name"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email Address</label>
+                  <input
+                    className="form-input"
+                    type="email"
+                    value={profileForm.email}
+                    onChange={e => setProfileForm(f => ({ ...f, email: e.target.value }))}
+                    placeholder="Your email"
+                    id="profile-email"
+                  />
+                </div>
+                <div className="profile-divider">
+                  <span>Change Password (optional)</span>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Current Password</label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    value={profileForm.currentPassword}
+                    onChange={e => setProfileForm(f => ({ ...f, currentPassword: e.target.value }))}
+                    placeholder="Enter current password"
+                    id="profile-current-pw"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">New Password</label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    value={profileForm.newPassword}
+                    onChange={e => setProfileForm(f => ({ ...f, newPassword: e.target.value }))}
+                    placeholder="Enter new password"
+                    id="profile-new-pw"
+                  />
+                </div>
+                <button className="btn btn-primary" type="submit" disabled={profileLoading} id="profile-save-btn">
+                  {profileLoading ? 'Saving...' : '💾 Save Changes'}
+                </button>
+              </form>
+            </div>
           </div>
         )}
       </div>

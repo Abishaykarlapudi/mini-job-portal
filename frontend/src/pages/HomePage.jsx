@@ -95,7 +95,9 @@ export default function HomePage() {
       <div className="filter-bar">
         <div className="filter-inner">
           <span className="filter-label">Filter:</span>
-          <div className="type-chips">
+
+          {/* Desktop: chip buttons */}
+          <div className="type-chips desktop-chips">
             {JOB_TYPES.map(t => (
               <button
                 key={t}
@@ -107,6 +109,19 @@ export default function HomePage() {
               </button>
             ))}
           </div>
+
+          {/* Mobile: dropdown select */}
+          <select
+            className="sort-select mobile-filter-select"
+            value={type}
+            onChange={e => handleTypeChange(e.target.value)}
+            id="mobile-type-select"
+          >
+            {JOB_TYPES.map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+
           <select
             id="sort-select"
             className="sort-select"

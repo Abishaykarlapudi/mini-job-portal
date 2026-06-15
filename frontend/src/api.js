@@ -172,4 +172,11 @@ export const api = {
       method: 'DELETE',
       headers: authHeaders(token),
     }).then((r) => r.json()),
+
+  updateProfile: (data, token) =>
+    fetch(`${API_BASE}/user/profile`, {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }).then((r) => r.json()),
 };

@@ -265,6 +265,10 @@ export default function RecruiterDashboard() {
   const [selectedApps, setSelectedApps] = useState({});
   const [notesSidebar, setNotesSidebar] = useState(null); // { jobId, app }
   const [interviewModal, setInterviewModal] = useState(null); // { jobId, app }
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: user?.name || '', email: user?.email || '', currentPassword: '', newPassword: '' });
+  const [profileMsg, setProfileMsg] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -509,6 +513,61 @@ export default function RecruiterDashboard() {
             </div>
           )}
 
+          {/* Profile Edit Modal */}
+          {profileOpen && (
+            <div className="modal-overlay" style={{ zIndex: 10001 }} onClick={() => setProfileOpen(false)}>
+              <div className="modal profile-modal" onClick={e => e.stopPropagation()}>
+                <div className="profile-edit-header">
+                  <div className="profile-avatar">{user?.name?.charAt(0).toUpperCase()}</div>
+                  <div>
+                    <h2 className="profile-edit-title">Edit Profile</h2>
+                    <p className="profile-edit-sub">Update your name, email or password</p>
+                  </div>
+                  <button className="modal-close-btn" onClick={() => setProfileOpen(false)}>✕</button>
+                </div>
+                {profileMsg && (
+                  <div className={`alert ${profileMsg.type === 'success' ? 'alert-success' : 'alert-error'}`}>
+                    {profileMsg.text}
+                  </div>
+                )}
+                <form className="profile-edit-form" onSubmit={async e => {
+                  e.preventDefault();
+                  setProfileLoading(true); setProfileMsg(null);
+                  try {
+                    const payload = { name: profileForm.name, email: profileForm.email };
+                    if (profileForm.newPassword) { payload.currentPassword = profileForm.currentPassword; payload.newPassword = profileForm.newPassword; }
+                    const res = await api.updateProfile(payload, token);
+                    if (res.success) { setProfileMsg({ type: 'success', text: '✅ Profile updated!' }); setProfileForm(f => ({ ...f, currentPassword: '', newPassword: '' })); }
+                    else setProfileMsg({ type: 'error', text: `⚠️ ${res.message}` });
+                  } catch { setProfileMsg({ type: 'error', text: '⚠️ Could not connect.' }); }
+                  finally { setProfileLoading(false); }
+                }} id="profile-form">
+                  <div className="form-group">
+                    <label className="form-label">Full Name</label>
+                    <input className="form-input" type="text" value={profileForm.name} onChange={e => setProfileForm(f => ({ ...f, name: e.target.value }))} placeholder="Your name" id="profile-name" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Email Address</label>
+                    <input className="form-input" type="email" value={profileForm.email} onChange={e => setProfileForm(f => ({ ...f, email: e.target.value }))} placeholder="Your email" id="profile-email" />
+                  </div>
+                  <div className="profile-divider"><span>Change Password (optional)</span></div>
+                  <div className="form-group">
+                    <label className="form-label">Current Password</label>
+                    <input className="form-input" type="password" value={profileForm.currentPassword} onChange={e => setProfileForm(f => ({ ...f, currentPassword: e.target.value }))} placeholder="Enter current password" id="profile-current-pw" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">New Password</label>
+                    <input className="form-input" type="password" value={profileForm.newPassword} onChange={e => setProfileForm(f => ({ ...f, newPassword: e.target.value }))} placeholder="Enter new password" id="profile-new-pw" />
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button className="btn btn-primary" type="submit" disabled={profileLoading} id="profile-save-btn">{profileLoading ? 'Saving...' : '💾 Save Changes'}</button>
+                    <button className="btn btn-secondary" type="button" onClick={() => setProfileOpen(false)}>Cancel</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
           {/* Header */}
           <div className="dashboard-header">
             <div>
@@ -516,6 +575,7 @@ export default function RecruiterDashboard() {
               <p className="dashboard-subtitle">Recruiter Dashboard — manage your hiring pipeline</p>
             </div>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button className="btn btn-ghost" onClick={() => { setProfileForm({ name: user?.name || '', email: user?.email || '', currentPassword: '', newPassword: '' }); setProfileMsg(null); setProfileOpen(true); }} id="edit-profile-btn">👤 Edit Profile</button>
               <button className="btn btn-secondary" onClick={() => navigate('/analytics')} id="analytics-btn">📊 Analytics</button>
               <button className="btn btn-primary" onClick={() => navigate('/jobs/create')} id="post-job-btn">+ Post New Job</button>
             </div>
